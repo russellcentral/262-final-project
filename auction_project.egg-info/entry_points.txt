@@ -1,0 +1,2 @@
+[console_scripts]
+auction-node = auction_project.main:main
