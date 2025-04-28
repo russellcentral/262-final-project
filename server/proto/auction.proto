@@ -1,0 +1,39 @@
+syntax = "proto3";
+package auction;
+
+// Auction service definition
+service Auction {
+  // Create a new auction with items
+  rpc Create(CreateRequest) returns (CreateResponse);
+  // Place a bid
+  rpc Bid(BidRequest) returns (BidResponse);
+  // Close the auction
+  rpc Close(CloseRequest) returns (CloseResponse);
+  // Query auction result
+  rpc Query(QueryRequest) returns (QueryResponse);
+}
+
+// Request to start a new auction
+message CreateRequest {
+  repeated string items = 1;
+}
+message CreateResponse {}
+
+// Request to place a bid
+message BidRequest {
+  string bidder = 1;
+  repeated string bundle = 2;
+  double value = 3;
+}
+message BidResponse {}
+
+// Request to close bidding
+message CloseRequest {}
+message CloseResponse {}
+
+// Request to query result
+message QueryRequest {}
+message QueryResponse {
+  string winner = 1;
+  double price = 2;
+}
