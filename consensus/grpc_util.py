@@ -18,5 +18,4 @@ def healthy_stub(addr: str, stub_cls):
             ('grpc.http2.min_ping_interval_without_data_ms', 10_000),
         ],
     )
-    grpc.channel_ready_future(ch).result(timeout=5)
     return stub_cls(ch)

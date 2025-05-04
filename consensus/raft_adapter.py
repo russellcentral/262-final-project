@@ -78,9 +78,9 @@ class RaftNode:
         self.next_index = {peer: len(self.log) for peer in self.peers}
         self.match_index = {peer: -1 for peer in self.peers}
 
+        from auction_project.consensus.grpc_util import healthy_stub
         def _lazy_stub(peer: str):
-            ch = grpc.insecure_channel(peer)
-            return raft_pb2_grpc.RaftStub(ch)
+            return healthy_stub(peer, raft_pb2_grpc.RaftStub)
 
         self.stubs = {p: _lazy_stub(p) for p in self.peers}
 
@@ -90,6 +90,7 @@ class RaftNode:
         self.leader_id = None
         self.role = 'follower'
         self.election_reset_event = threading.Event()
+        self.election_reset_event.set()
 
     def _persist_state(self):
         """Persist current_term and voted_for to disk atomically."""
