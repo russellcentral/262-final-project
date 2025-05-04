@@ -20,6 +20,10 @@ server/__init__.py
 server/grpc_server.py
 server/jsonrpc_server.py
 server/proto/__init__.py
+server/proto/auction_pb2.py
+server/proto/auction_pb2_grpc.py
+server/proto/raft_pb2.py
+server/proto/raft_pb2_grpc.py
 storage/__init__.py
 storage/snapshot_manager.py
 storage/storage.py

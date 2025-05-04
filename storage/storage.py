@@ -48,7 +48,6 @@ class Storage:
             json.dump(state, f)
             f.flush()
             os.fsync(f.fileno())
-        # Atomic rename to final path
         os.replace(temp_path, final_path)
 
     def read_log(self) -> list:

@@ -1,8 +1,8 @@
 """
 state_machine.py: Deterministic state machine for auction events
 """
-from vcg_auction.common.entries import CreateEntry, BidEntry, CloseEntry
-from vcg_auction.auction.allocation import allocate
+from auction_project.common.entries import CreateEntry, BidEntry, CloseEntry
+from auction_project.auction.allocation import allocate
 
 class AuctionState:
     def __init__(self):
@@ -47,7 +47,6 @@ class AuctionServiceCore:
             raise RuntimeError("Auction not created")
         if self.state.closed:
             raise RuntimeError("Auction is closed")
-        # In a single-item auction, bundle is ignored
         entry = BidEntry(bidder=bidder_id, bundle=bundle, value=value).to_dict()
         self.rlog.append(entry)
 
@@ -88,4 +87,3 @@ class AuctionServiceCore:
             winner, price = allocate(self.state.bids)
             self.state.winner = winner
             self.state.price = price
-        # Ignore unknown entry types

@@ -17,10 +17,6 @@ class SnapshotManager:
         """
         entries = self.storage.read_log()
         if len(entries) >= self.threshold:
-            # Write snapshot
             self.storage.snapshot(state)
-            # Optionally, truncate the log to empty (history collapsed)
-            # with open(self.storage.log_path, 'w') as f:
-            #     pass
             return True
         return False

@@ -5,7 +5,7 @@ from auction_project.server.proto import raft_pb2, raft_pb2_grpc
 class ReplicatedLog:
     def __init__(self, raft_node):
         """
-        Wraps a RaftNode to provide a simple append() interface.
+        Wraps a RaftNode to provide a simple append()/recover() interface.
         raft_node: an instance of RaftNode (leader or follower)
         """
         self.raft = raft_node
@@ -16,29 +16,24 @@ class ReplicatedLog:
         Must be called on the leader; otherwise raises.
         Returns the index of the newly appended entry.
         """
-        # Only leader can append
         if self.raft.role != 'leader':
             raise RuntimeError("Cannot append on non-leader")
 
         term = self.raft.current_term
         data_str = json.dumps(entry)
 
-        # Persist to local log storage
+        # Local append
         idx = len(self.raft.log)
-        # Append to in-memory log
         self.raft.log.append((term, entry))
-        # Persist log entry
         self.raft.storage.append({'term': term, 'data': data_str})
 
-        # Initialize leader match_index for self
-        # (leader commits its own entries immediately)
+        # Leader immediately considers its own entry replicated
         self.raft.match_index[self.raft.node_id] = idx
         self.raft.next_index[self.raft.node_id] = idx + 1
 
-        # Broadcast AppendEntries to followers
-        successes = 1  # leader itself
+        # Send to followers
         for peer in self.raft.peers:
-            prev_idx = idx - 1
+            prev_idx  = idx - 1
             prev_term = self.raft.log[prev_idx][0] if prev_idx >= 0 else 0
             log_entry = raft_pb2.LogEntry(term=term, data=data_str)
             req = raft_pb2.AppendEntriesRequest(
@@ -51,10 +46,10 @@ class ReplicatedLog:
             )
             try:
                 channel = grpc.insecure_channel(peer)
-                stub = raft_pb2_grpc.RaftStub(channel)
-                resp = stub.AppendEntries(req)
-                # If follower's term is higher, step down
-                if resp.term > self.raft.current_term:
+                stub    = raft_pb2_grpc.RaftStub(channel)
+                resp    = stub.AppendEntries(req)
+                # Leader steps down if sees higher term
+                if resp.term > term:
                     with self.raft.state_lock:
                         self.raft.current_term = resp.term
                         self.raft.role = 'follower'
@@ -62,46 +57,48 @@ class ReplicatedLog:
                         self.raft._persist_state()
                     raise RuntimeError("Stepped down due to higher term")
                 if resp.success:
-                    successes += 1
                     self.raft.match_index[peer] = idx
-                    self.raft.next_index[peer] = idx + 1
+                    self.raft.next_index[peer]  = idx + 1
                 else:
-                    # Retry by decrementing next_index
+                    # decrement next_index for retry
                     self.raft.next_index[peer] = max(0, self.raft.next_index[peer] - 1)
             except Exception:
-                # Could not reach follower, skip
+                # ignore unreachable followers
                 pass
 
-        # Advance commit_index if majority replicated
-        N = self.raft.commit_index
-        length = len(self.raft.log)
-        for new_commit in range(self.raft.commit_index + 1, length):
-            # Only commit entries from current term
-            if self.raft.log[new_commit][0] != term:
+        # Advance commit_index only on majority
+        new_commit = self.raft.commit_index
+        for n in range(self.raft.commit_index + 1, len(self.raft.log)):
+            # only commit entries from current term
+            if self.raft.log[n][0] != term:
                 continue
-            count = 0
-            for p, match in self.raft.match_index.items():
-                if match >= new_commit:
-                    count += 1
-            # Leader counts as well
-            if count >= (len(self.raft.peers) + 1) // 2 + 1:
-                N = new_commit
-        # Apply entries between commit_index+1 and N
-        for apply_idx in range(self.raft.commit_index + 1, N + 1):
-            _, ent = self.raft.log[apply_idx]
+            count = sum(1 for m in self.raft.match_index.values() if m >= n)
+            # include leader itself
+            if count + 1 >= (len(self.raft.peers) + 1) // 2 + 1:
+                new_commit = n
+
+        # Apply any newly committed entries
+        for idx_to_apply in range(self.raft.commit_index + 1, new_commit + 1):
+            _, ent = self.raft.log[idx_to_apply]
             self.raft.apply_callback(ent)
-            # Optionally snapshot
             try:
                 state = self.raft.apply_callback.__self__.state.to_dict()
                 self.raft.snapshot_manager.maybe_snapshot(state)
             except Exception:
                 pass
-        self.raft.commit_index = N
+
+        self.raft.commit_index = new_commit
         return idx
+
+    def recover(self):
+        """
+        Replay all persisted log entries through the state machine.
+        """
+        for term, entry in self.raft.log:
+            self.raft.apply_callback(entry)
 
     def register_handler(self, handler):
         """
-        No-op: RaftNode.apply_callback already handles log application.
-        Provided for API compatibility.
+        No-op for compatibility. RaftNode.apply_callback is used instead.
         """
         pass

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import auction_pb2 as auction__pb2
+from auction_project.server.proto import auction_pb2 as auction__pb2
 
 GRPC_GENERATED_VERSION = '1.71.0'
 GRPC_VERSION = grpc.__version__
